@@ -33,7 +33,7 @@ test('seven distinct cases resolve private expected data and fixture references'
   assert.equal(cases.length, 7);
   assert.equal(new Set(cases.map((item) => item.id)).size, 7);
   for (const item of cases) {
-    for (const field of ['id', 'category', 'request', 'fixture', 'expected', 'prohibited', 'requirement']) {
+    for (const field of ['id', 'category', 'request', 'fixture', 'expected', 'assertions', 'prohibited', 'requirement']) {
       assert.ok(item[field], `${item.id}: ${field}`);
     }
     assert.notEqual(expected[item.expected], undefined);

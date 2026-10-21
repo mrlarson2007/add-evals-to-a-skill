@@ -1,0 +1,97 @@
+{
+  "checkedAt": "2026-10-21",
+  "node": "24.21.0",
+  "sourceVerification": {
+    "websiteFetch": "Direct promptfoo.dev website fetches failed DNS resolution in this environment. Website documentation URLs below are reference links, not claims of successful website access.",
+    "documentationRead": [
+      "https://raw.githubusercontent.com/promptfoo/promptfoo/main/site/docs/providers/openai-codex-sdk.md",
+      "https://raw.githubusercontent.com/promptfoo/promptfoo/main/site/docs/providers/claude-agent-sdk.md"
+    ],
+    "method": "Documentation was read via GitHub raw upstream files using curl. Option names were cross-checked against the pinned 0.124.1 upstream TypeScript source and installed provider bundles. Exact generated configurations for all three profiles successfully loaded through the installed promptfoo loadApiProvider API."
+  },
+  "cleanInstallVerification": {
+    "commands": ["npm ci", "npm run eval:check"],
+    "result": "Both commands exited zero in a fresh project copy excluding node_modules, .git, .eval-results, and .authoring-exercise. A separate project-local npm cache was used.",
+    "offlineTests": "17 passed, including dry-run contract tests for Codex, Claude, and Copilot.",
+    "localEvidence": ".eval-results/clean-install-55cc92df-c153-47f1-ab4d-34ca6b00a857/verification.json",
+    "liveCommand": "npm run eval:smoke -- --runtime copilot --timeout 45000",
+    "liveResult": "Passed with real SDK tool use and skill invocation after workspace read restrictions were applied."
+  },
+  "promptfoo": {
+    "version": "0.124.1",
+    "minimumNode": "22.22.0",
+    "installedEvidence": "node_modules/promptfoo/dist/src/index.d.ts",
+    "entryPoints": [
+      "loadApiProvider(providerPath, { options: { config }, basePath })",
+      "cache.disableCache()",
+      "provider.callApi(prompt, { vars: {}, prompt: { raw, label } })"
+    ],
+    "execution": "The worker loads the native provider through promptfoo and calls its SDK-backed callApi method. Grading happens independently in the parent process; expectations are not provider variables."
+  },
+  "codex": {
+    "providerId": "openai:codex-sdk",
+    "sdk": "@openai/codex-sdk",
+    "version": "0.163.0",
+    "documentation": "https://www.promptfoo.dev/docs/providers/openai-codex-sdk/",
+    "pinnedSource": "https://github.com/promptfoo/promptfoo/blob/0.124.1/src/providers/openai/codex-sdk.ts",
+    "verifiedConfiguration": [
+      "working_dir",
+      "sandbox_mode: read-only",
+      "approval_policy: never",
+      "network_access_enabled: false",
+      "skip_git_repo_check: true",
+      "enable_streaming: true"
+    ],
+    "skillDiscovery": ".agents/skills/review-code/",
+    "verification": "Generated provider loaded successfully. A real smoke attempt reached the native provider but exceeded the explicit 15000ms process timeout. No successful Codex task execution is claimed.",
+    "observationLimits": "Native raw turn items expose command_execution and file_change. Provider skill metadata is heuristic, so command-based skill reads require raw-trace inspection."
+  },
+  "claude": {
+    "providerId": "anthropic:claude-agent-sdk",
+    "sdk": "@anthropic-ai/claude-agent-sdk",
+    "version": "0.3.307",
+    "documentation": "https://www.promptfoo.dev/docs/providers/claude-agent-sdk/",
+    "pinnedSource": "https://github.com/promptfoo/promptfoo/blob/0.124.1/src/providers/claude-agent-sdk.ts",
+    "verifiedConfiguration": [
+      "working_dir",
+      "setting_sources: [project]",
+      "permission_mode: dontAsk",
+      "skills: [review-code]",
+      "custom_allowed_tools: [Read, Grep, Glob, Skill]",
+      "disallowed_tools: [Write, Edit, Bash, NotebookEdit, WebFetch, WebSearch]",
+      "max_turns: 12"
+    ],
+    "skillDiscovery": ".claude/skills/review-code/",
+    "verification": "Generated provider loaded successfully. A real smoke attempt failed because ANTHROPIC_API_KEY was absent. No successful Claude task execution is claimed.",
+    "observationLimits": "Native metadata exposes skillCalls, toolCalls, and permissionDenials. Absent tool evidence does not prove that a skill was not activated."
+  },
+  "copilot": {
+    "providerId": "scripts/copilot-provider.mjs",
+    "sdk": "@github/copilot-sdk",
+    "version": "1.0.25",
+    "documentation": "https://github.com/github/copilot-sdk",
+    "installedEvidence": [
+      "node_modules/@github/copilot-sdk/dist/client.d.ts",
+      "node_modules/@github/copilot-sdk/dist/session.d.ts",
+      "node_modules/@github/copilot-sdk/dist/types.d.ts",
+      "node_modules/@github/copilot-sdk/dist/generated/rpc.d.ts"
+    ],
+    "entryPoints": [
+      "new CopilotClient({ workingDirectory, baseDirectory, logLevel })",
+      "client.createSession({ workingDirectory, configDirectory, enableConfigDiscovery: false, skillDirectories, availableTools, onPermissionRequest })",
+      "session.on(eventHandler)",
+      "session.sendAndWait({ prompt }, timeoutMs)",
+      "session.disconnect()",
+      "client.stop()"
+    ],
+    "skillDiscovery": "Explicit skillDirectories points to the isolated .agents/skills directory.",
+    "permissions": "A read request provides request.kind === read and request.path. Only realpath-resolved workspace descendants receive { kind: approve-once }; all other requests receive { kind: reject, feedback }. The installed native runtime rejects approve and approved as callback responses; approve-once was verified in a successful live run.",
+    "verification": "A real R1/current smoke passed after workspace read restrictions were applied. Native tool execution and skill.invoked for review-code were observed.",
+    "observationLimits": "session.skills_loaded indicates discovery, not invocation. skill.invoked indicates invocation, not correct reasoning. Absence of observed write requests does not prove complete trace coverage."
+  },
+  "dependencyAdvisories": {
+    "directPackages": "All four exact direct dependency versions were checked against the GitHub advisory tool before installation; it reported no vulnerabilities.",
+    "override": "basic-ftp 6.2.3 was advisory-checked and pinned as an override.",
+    "remaining": "npm audit reported three high-severity affected packages in the promptfoo -> jks-js -> node-forge path. Latest available node-forge 1.4.0 remained affected at verification time. No zero-vulnerability claim is made."
+  }
+}
