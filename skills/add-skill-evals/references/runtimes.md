@@ -66,3 +66,35 @@ substitute for real agent authoring.
 
 For comparisons, pin runtime, model, target revision, tasks, graders and permissions;
 only the skill revision being compared changes. Include failures and uncertainty.
+
+## Promptfoo execution profiles
+
+Authoring installation above does not establish execution compatibility. Inspect
+the installed promptfoo version and current provider documentation before emitting
+configuration. The repository example initially pins promptfoo 0.124.1 and uses:
+
+| Runtime under test | Execution integration | Authentication and limits |
+| --- | --- | --- |
+| Codex SDK | `openai:codex-sdk`, `working_dir`, read-only sandbox, no approvals or fixture-driven network | Follow Codex CLI/SDK authentication; do not assume Anthropic or GitHub credentials apply. Skill-read evidence can be heuristic. Read-only does not confine filesystem reads. |
+| Claude Agent SDK | `anthropic:claude-agent-sdk`, `working_dir`, project settings, selected skills, read-only tools | The pinned promptfoo provider requires its documented Anthropic/Bedrock/Vertex authentication path; a Claude subscription alone is not assumed sufficient. Preapproved tools bypass permission callbacks: enforce path restrictions using mandatory hooks or an external sandbox. |
+| Copilot CLI/SDK | Official SDK through a promptfoo JavaScript provider when no suitable native integration exists | Use Copilot's documented CLI/SDK login. Never substitute GitHub Models. Explicit skill directories and scoped permission callbacks are required; record actual native events only. |
+
+Provider references:
+[Codex](https://www.promptfoo.dev/docs/providers/openai-codex-sdk/),
+[Claude](https://www.promptfoo.dev/docs/providers/claude-agent-sdk/),
+[custom JavaScript](https://www.promptfoo.dev/docs/providers/custom-api/),
+[Copilot SDK](https://github.com/github/copilot-sdk).
+The repository's paired example demonstrates the concrete integrations; the
+installed authoring skill must adapt them to the target's output and permissions,
+not assume that this read-only review profile fits a file-producing skill.
+
+Use strict structured output where the selected provider supports it, followed
+by independent validation. Set finite per-trial deadlines, clean up runtime child
+processes, disable live response caching, and run serially unless workspaces are
+truly independent. Show the planned calls before execution. Do not invent
+sampling, cost, trace, or resolved-model fields the provider does not expose.
+
+A text-only model prompt containing a skill is an approximation, not a native
+discovery/tools/permissions test. Record authoring and execution as independently
+tested, failed, unrun, or unsupported, with exact surfaces and versions. Copilot
+CLI/SDK evidence does not establish VS Code, cloud agent, or code-review behavior.

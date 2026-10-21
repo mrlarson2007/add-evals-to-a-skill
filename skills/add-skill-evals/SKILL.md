@@ -7,6 +7,8 @@ description: Add or extend executable, artifact-checking evaluations for an exis
 
 Build evidence about a skill's behavior, not a certification of safety or quality.
 Keep the target skill unchanged unless the user separately requests a change.
+`add-skill-evals` is the authoring helper; the user's named skill is the target
+under test. Do not confuse their artifacts, installation, or compatibility claims.
 
 1. **Inspect.** Read the target `SKILL.md`, linked resources, existing evals and
    repository test commands. Identify inputs, promised artifacts, tools, permissions

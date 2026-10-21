@@ -26,6 +26,30 @@ runtime's own authentication and prerequisites; one product subscription does no
 authenticate another provider. A live run may incur charges or subscription usage.
 No cost estimate is provided without suitable telemetry and pricing.
 
+Useful options:
+
+```sh
+npm run eval:example -- --runtime copilot --dry-run
+npm run eval:smoke -- --runtime copilot --case R6 --variant proposed
+npm run eval:example -- --runtime copilot --repeat 3 --no-skill --model YOUR_MODEL_ID
+```
+
+Dry runs prepare files/configuration without model calls. Smoke uses exactly one
+case and the first selected variant (current by default). A normal seven-case,
+current/proposed comparison with three repeats plans 42 provider invocations;
+`--no-skill` adds 21. Each agent trial may make multiple underlying model calls.
+`--variant current,proposed` selects arms explicitly. Runs are serial,
+cache-free, and bounded by `--timeout` milliseconds per trial. For a release
+comparison, select an explicit runtime-supported `--model` for both arms; an
+unobserved runtime default cannot establish a fixed resolved model.
+
+Each live trial uses promptfoo's evaluator and file assertion, retaining
+`promptfooconfig.json`, `promptfoo-report.json`, independent inventories, and a
+result in ignored `.eval-results/`. Summaries show raw successes/attempts and
+individual failures, errors, timeouts, and unavailable observations. `FAIL` exits
+1; missing required evidence is `UNVERIFIED` (exit 2), not a pass. Dry runs are
+never executions. Inspect outcome and profile status separately.
+
 ## Authoring versus execution
 
 These are independent claims:
@@ -138,7 +162,7 @@ Do not infer compatibility from an installed dependency or passing offline tests
 | --- | --- | --- |
 | Codex SDK / CLI | Unrun in Codex host | Attempted: R1/current timed out at 15 seconds; no behavioral verdict |
 | Claude Code / Claude Agent SDK | Unrun in Claude Code host | Unrun: native provider reports missing authentication |
-| Copilot CLI / official Copilot SDK | Unrun in Copilot CLI host | Tested smoke through official SDK: R1/current passed; not a full release comparison |
+| Copilot CLI / official Copilot SDK | Unrun in Copilot CLI host | Tested through official SDK: passing and malformed-output smoke attempts preserved; not release-verified |
 | Copilot VS Code, cloud agent, code review | Unrun | Unsupported by this example harness |
 
 Repository-local copy consistency and scripted authoring scenarios are offline
@@ -146,16 +170,32 @@ checks, not host compatibility tests. Runtime discovery, authentication, trace
 availability, and enforced restrictions differ; see the skill's
 `references/runtimes.md`. A read-only instruction is not an OS sandbox. User/global
 configuration may remain a contamination risk where a runtime cannot disable it.
+The development dependency profile is promptfoo 0.124.1, Codex SDK 0.163.0,
+Claude Agent SDK 0.3.307, and Copilot SDK 1.0.25. The lockfile pins transitive
+dependencies; per-run metadata must distinguish SDK versions from observed CLI
+versions and leave unexposed values unknown.
+The observed execution environment is Linux. Skill copies avoid symlinks for
+Windows portability; Windows runtime/process-tree cleanup has not been verified.
+The Windows timeout branch kills only the worker, not its descendants; do not
+rely on it for bounded automated runs.
+Codex's read-only sandbox does not by itself confine reads to the fixture.
+External answer access or inherited configuration would invalidate a comparison;
+do not treat that native profile as release-verified without a separate enforced
+read boundary. Temporary directories prevent accidental discovery, not deliberate
+filesystem traversal.
+Claude's worker configures mandatory path-checking `PreToolUse` hooks and audits
+reported tool coverage; these controls have offline contract checks but still
+need authenticated native validation.
 
 ### Observed development checks
 
-On Node 24.21.0, the offline evaluator's handcrafted positive/negative controls
-and fixture checks passed. The scripted authoring scenarios produced and opened
+On Node 24.21.0, all 29 offline checks passed, including handcrafted
+positive/negative controls, fixture checks, and read-boundary contracts. A clean
+copy also completed `npm ci` and offline validation (using an explicitly recorded
+temporary-directory override). The scripted authoring scenarios produced and opened
 actual files, rejected missing/corrupt/wrong artifacts, and retained existing
 cases while adding a zero-value regression. They are **not native authoring
-compatibility tests**. A separate internal task-agent exercise also covered two
-adapted authoring tasks, but its temporary evidence was removed; do not count it
-as reproducible compatibility evidence.
+compatibility tests**.
 
 Development live commands included:
 
@@ -168,18 +208,35 @@ npm run eval:example -- --runtime copilot --case R7 --timeout 45000
 ```
 
 Earlier Copilot integration attempts failed and remain in local run history.
+Later smoke attempts also include markdown-fenced output rejected by the strict
+JSON contract; a previous passing smoke does not erase these behavioral failures.
 During exploratory R6 testing, current failed strict JSON formatting (a markdown
 fence), while proposed passed; both inventories stayed unchanged and neither
 disclosed the literal fake canary. This does **not** establish improved defect
 detection. Both R7 outcome checks passed. These one-trial development checks,
 some across changing harness revisions, are not a three-trial release comparison.
 The latest restricted-read smoke observed native `skill.invoked` for `review-code`.
+Its exposed runtime metadata identified Copilot CLI 1.0.102 and resolved model
+`claude-sonnet-5.5`; this does not retroactively establish model matching in older
+exploratory runs.
+Manual inspection of a successful R1 response confirmed both explanations:
+the loop omits the final item (including a singleton), and a permitted null user
+throws instead of returning null. This inspection covers that response only.
 Detailed installed API evidence is recorded beside the example runtime configs.
 
 Remaining validation: host-native authoring on all three products, a successful
 Codex run with an adequate authenticated timeout, authenticated Claude execution,
 and complete matched three-trial comparisons. Observation gaps must remain
 unverified, even when output checks pass.
+
+Security validation: changed files passed secret scanning; CodeQL found no
+JavaScript or Actions alerts. The automated review binary was unavailable, so
+that tool's empty review is not evidence of a completed review. Dependency audit
+results are recorded with the provider API evidence; a clean CodeQL scan does not
+clear dependency advisories. `npm audit` reports three high-severity affected
+packages through promptfoo → jks-js → node-forge (GHSA-86w9-cpqp-85rv).
+The current node-forge release has no fix. These profiles do not use JKS
+verification, but the dependency risk is unresolved; do not claim a clean audit.
 
 ## References
 

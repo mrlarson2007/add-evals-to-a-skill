@@ -7,6 +7,9 @@
     "node": ">=22.22.0"
   },
   "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "install:skill": "node scripts/install-skill.mjs",
+    "scaffold:evals": "node scripts/scaffold-evals.mjs",
     "eval:check": "node --test tests/*.test.mjs",
     "eval:smoke": "node scripts/run-example.mjs --smoke",
     "eval:example": "node scripts/run-example.mjs"

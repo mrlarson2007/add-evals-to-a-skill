@@ -1,6 +1,11 @@
 {
   "checkedAt": "2026-10-21",
   "node": "24.21.0",
+  "executionIsolation": {
+    "scheduling": "Serial trials; each trial gets a fresh working directory and a separate Node subprocess. No execution threads share process.cwd.",
+    "deadline": "A finite parent-process deadline kills the worker's POSIX process group with SIGKILL, including descendants that retain the group. Remaining group members are also killed when the worker exits.",
+    "limits": "A descendant that deliberately creates its own process group can escape group cleanup. Windows currently kills only the worker; descendant cleanup is not guaranteed there. This harness is not a complete operating-system sandbox."
+  },
   "sourceVerification": {
     "websiteFetch": "Direct promptfoo.dev website fetches failed DNS resolution in this environment. Website documentation URLs below are reference links, not claims of successful website access.",
     "documentationRead": [
@@ -11,22 +16,26 @@
   },
   "cleanInstallVerification": {
     "commands": ["npm ci", "npm run eval:check"],
-    "result": "Both commands exited zero in a fresh project copy excluding node_modules, .git, .eval-results, and .authoring-exercise. A separate project-local npm cache was used.",
-    "offlineTests": "17 passed, including dry-run contract tests for Codex, Claude, and Copilot.",
-    "localEvidence": ".eval-results/clean-install-55cc92df-c153-47f1-ab4d-34ca6b00a857/verification.json",
+    "result": "Both commands exited zero in a fresh project copy excluding node_modules, .git, .eval-results, and .authoring-exercise. A separate project-local npm cache and project-local TMPDIR override were used for validation.",
+    "offlineTests": "Latest source-copy validation: 29 passed using installed ancestor dependencies and project-local TMPDIR. This includes Claude hook/path defenses and Codex isolation verdict cap. The separately retained clean-install run passed its then-current 26 tests.",
+    "localEvidence": ".eval-results/clean-install-277b31ca-1df6-4390-aff5-0ce4b62e3948/verification.json",
     "liveCommand": "npm run eval:smoke -- --runtime copilot --timeout 45000",
-    "liveResult": "Passed with real SDK tool use and skill invocation after workspace read restrictions were applied."
+    "liveResult": "Passed with real SDK tool use and skill invocation after workspace read restrictions and tri-state scoring were applied. Latest observed Copilot CLI version: 1.0.102; resolved model: claude-sonnet-5.5."
   },
   "promptfoo": {
     "version": "0.124.1",
     "minimumNode": "22.22.0",
     "installedEvidence": "node_modules/promptfoo/dist/src/index.d.ts",
     "entryPoints": [
-      "loadApiProvider(providerPath, { options: { config }, basePath })",
+      "TestSuiteConfigSchema.parse(generatedConfig)",
+      "loadApiProvider(providerPath, { options: { config }, basePath }) for offline profile validation only",
       "cache.disableCache()",
-      "provider.callApi(prompt, { vars: {}, prompt: { raw, label } })"
+      "evaluate(generatedConfig, { cache: false, maxConcurrency: 1, repeat: 1 })",
+      "evaluation.toEvaluateSummary()",
+      "evaluation.getResults()"
     ],
-    "execution": "The worker loads the native provider through promptfoo and calls its SDK-backed callApi method. Grading happens independently in the parent process; expectations are not provider variables."
+    "execution": "The worker runs promptfoo evaluate on a retained one-test promptfooconfig.json, with a JavaScript file assertion pointing to the private grader. Only caseId is a test variable, never expected arrays. promptfoo-report.json retains evaluation results. Parent-process grading/inventory/disclosure/routing controls remain independent.",
+    "nativeStructuredOutput": "Codex output_schema and Claude output_format { type: json_schema, schema } use the shared strict review schema for R1-R6. Native object schema is omitted for R7's integer-only contract; independent grading still applies."
   },
   "codex": {
     "providerId": "openai:codex-sdk",
@@ -44,7 +53,8 @@
     ],
     "skillDiscovery": ".agents/skills/review-code/",
     "verification": "Generated provider loaded successfully. A real smoke attempt reached the native provider but exceeded the explicit 15000ms process timeout. No successful Codex task execution is claimed.",
-    "observationLimits": "Native raw turn items expose command_execution and file_change. Provider skill metadata is heuristic, so command-based skill reads require raw-trace inspection."
+    "observationLimits": "The shared neutral prompt permits read-only inspection (including native shell cat/rg), prohibits changing files or executing supplied source, and disallows unrelated commands. Native raw turn items expose command_execution and file_change. Skill metadata is heuristic; command-based skill reads and possible shell write attempts require raw-trace inspection. Shell availability alone is not evidence of an attempted write or of complete write-attempt coverage.",
+    "readIsolationGap": "Codex read-only sandbox does not confine reads to the working directory; evaluator answers outside cwd remain readable. No enforced SDK read boundary is available in this harness. Even correct outputs are capped at UNVERIFIED rather than a passing release profile. Known outcome/errors still fail independently."
   },
   "claude": {
     "providerId": "anthropic:claude-agent-sdk",
@@ -63,7 +73,14 @@
     ],
     "skillDiscovery": ".claude/skills/review-code/",
     "verification": "Generated provider loaded successfully. A real smoke attempt failed because ANTHROPIC_API_KEY was absent. No successful Claude task execution is claimed.",
-    "observationLimits": "Native metadata exposes skillCalls, toolCalls, and permissionDenials. Absent tool evidence does not prove that a skill was not activated."
+    "observationLimits": "Native metadata exposes skillCalls, toolCalls, and permissionDenials. Absent tool evidence does not prove that a skill was not activated.",
+    "mandatoryReadBoundary": {
+      "apiEvidence": "Installed SDK sdk.d.ts HookCallbackMatcher (matcher omitted matches all), PreToolUseHookInput.tool_name/tool_input/tool_use_id, and PreToolUseHookSpecificOutput.permissionDecision; installed promptfoo passes config.hooks to native query options.",
+      "injection": "After parsing the serializable generated config, runtime-worker injects mandatory native PreToolUse callback functions before promptfoo evaluate. It does not rely on canUseTool, which preapproved tools can bypass.",
+      "policy": "Canonical realpath containment for Read.file_path and Grep/Glob.path (defaulting to native cwd within workspace). Recursive searches reject symlink-containing trees and escaping Glob patterns. Only the installed review-code Skill is allowed; all unrelated tools are denied. Audit-recording errors fail closed.",
+      "evidence": "Each native metadata.toolCalls id/name must match a recorded boundary hook observation before the profile can claim verified coverage. Missing coverage yields UNVERIFIED. Hook events are explicitly harness.claude.pre_tool, not invented native events.",
+      "limitation": "Guard/API preservation and escape controls are tested offline; live Claude execution remains blocked by missing authentication. This is a native tool-read boundary, not a complete operating-system sandbox."
+    }
   },
   "copilot": {
     "providerId": "scripts/copilot-provider.mjs",
@@ -74,6 +91,8 @@
       "node_modules/@github/copilot-sdk/dist/client.d.ts",
       "node_modules/@github/copilot-sdk/dist/session.d.ts",
       "node_modules/@github/copilot-sdk/dist/types.d.ts",
+      "node_modules/@github/copilot-sdk/dist/toolSet.d.ts",
+      "node_modules/@github/copilot-sdk/dist/generated/session-events.d.ts",
       "node_modules/@github/copilot-sdk/dist/generated/rpc.d.ts"
     ],
     "entryPoints": [
@@ -85,13 +104,43 @@
       "client.stop()"
     ],
     "skillDiscovery": "Explicit skillDirectories points to the isolated .agents/skills directory.",
-    "permissions": "A read request provides request.kind === read and request.path. Only realpath-resolved workspace descendants receive { kind: approve-once }; all other requests receive { kind: reject, feedback }. The installed native runtime rejects approve and approved as callback responses; approve-once was verified in a successful live run.",
+    "permissions": "PermissionRequestRead in generated/session-events.d.ts documents kind: read and path: string. Only canonical realpath-resolved workspace descendants receive { kind: approve-once }; missing/ambiguous/outside/symlink-escape paths, managed-human-approval or sandbox-bypass requests, and all non-read requests are rejected. Discovery artifacts are inside the same workspace. The runtime rejects approve and approved as callback responses; approve-once was verified live.",
+    "tools": "Official SDK ToolSet.addBuiltIn([view, glob, grep, skill]) source-qualifies the allowlist as builtin:view, builtin:glob, builtin:grep, builtin:skill. The native skill tool is retained. Actual tool.execution_start events observed skill and view; skill.invoked is the native activation event. No skill.used event is invented.",
     "verification": "A real R1/current smoke passed after workspace read restrictions were applied. Native tool execution and skill.invoked for review-code were observed.",
+    "sourceQualifiedFollowUp": "A later project-local live evaluation exercised ToolSet.addBuiltIn, observed native skill and view tool execution plus skill.invoked, and failed the strict output assertion because the response used Markdown fences. Tool availability is verified; that run is not reported as a passing task outcome.",
+    "latestNativeValidation": {
+      "localEvidence": ".eval-results/live-final-c5d006f5-ca09-49c3-a40c-9a21a3a9c9b1/verification.json",
+      "result": "Final evaluate worker, source-qualified tools, canonical read permissions, exact shared R1 prompt, and current skill: promptfoo file assertion passed, inventory unchanged, native skill invocation observed.",
+      "observedModel": "claude-sonnet-5.5",
+      "observedCliVersion": "1.0.102",
+      "limitation": "This rerun used a project-local validation workspace; it verifies SDK/tool/evaluation behavior, not production workspace isolation."
+    },
     "observationLimits": "session.skills_loaded indicates discovery, not invocation. skill.invoked indicates invocation, not correct reasoning. Absence of observed write requests does not prove complete trace coverage."
   },
   "dependencyAdvisories": {
+    "cleanDependencyReleaseClaimAllowed": false,
+    "rawAuditEvidence": ".eval-results/dependency-research/npm-audit.json",
+    "auditVerificationEvidence": ".eval-results/dependency-research/audit-verification.json",
+    "latestAudit": "npm audit --omit=dev --json exited 1 with three high-severity affected packages; raw output and matching lock hash were preserved locally.",
     "directPackages": "All four exact direct dependency versions were checked against the GitHub advisory tool before installation; it reported no vulnerabilities.",
     "override": "basic-ftp 6.2.3 was advisory-checked and pinned as an override.",
-    "remaining": "npm audit reported three high-severity affected packages in the promptfoo -> jks-js -> node-forge path. Latest available node-forge 1.4.0 remained affected at verification time. No zero-vulnerability claim is made."
+    "remaining": "npm audit reported three high-severity affected packages in the promptfoo -> jks-js -> node-forge path. Latest available node-forge 1.4.0 remained affected by GHSA-86w9-cpqp-85rv at verification time. No zero-vulnerability claim is made.",
+    "candidateInvestigation": {
+      "version": "promptfoo 0.116.7",
+      "advisoryCheck": "The GitHub advisory tool reported no vulnerabilities for this exact candidate before its published npm tarball was inspected.",
+      "compatible": false,
+      "packageEvidence": [
+        "Published 0.116.7 dist/src/providers/registry.js:165-188 supports Anthropic messages/completion only; claude-agent-sdk is rejected as an unknown model.",
+        "Published 0.116.7 dist/src/providers/registry.js:534-578 has no Codex SDK provider; codex-sdk falls through to ordinary OpenAI chat-model handling.",
+        "No codex-sdk, claude-agent-sdk, or claude-code implementation exists in that package's published providers directory."
+      ],
+      "decision": "Do not downgrade: it would remove required native SDK execution and could silently substitute a chat-model provider for Codex."
+    },
+    "reachability": {
+      "dependencyPath": "promptfoo optionalDependencies.jks-js -> jks-js 1.1.7 -> node-forge ^1.4.0",
+      "sourceEvidence": "Installed providers-Bn5yoNPJ.js:12091-12106 imports jks-js only for signature certificate type jks; lines12676-12720 import it for HTTP TLS when jksPath or jksContent is configured.",
+      "generatedProfiles": "The fixed Codex SDK, Claude Agent SDK, and Copilot SDK configurations do not select the HTTP provider or configure JKS signature/TLS credentials, so this JKS conversion path is unused by the generated harness profiles.",
+      "blocker": "No patched current node-forge release was available. This is a retained dependency vulnerability, not a completed security remediation; enabling additional HTTP/JKS provider paths requires reassessment. No lock entries were removed and no stub dependency was substituted."
+    }
   }
 }

@@ -1,6 +1,23 @@
 import { appendFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 
+export const READ_ONLY_TOOLS = ['view', 'glob', 'grep', 'skill'];
+
+export async function workspaceReadPermission(workspace, request) {
+  if (request.kind === 'read' && !request.managedApprovalRequired && !request.requestSandboxBypass
+      && typeof request.path === 'string' && request.path.trim()) {
+    try {
+      const root = await realpath(workspace);
+      const resolved = await realpath(path.resolve(root, request.path));
+      const relative = path.relative(root, resolved);
+      if (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`)) {
+        return { kind: 'approve-once' };
+      }
+    } catch { /* Missing or unresolvable paths do not receive read permission. */ }
+  }
+  return { kind: 'reject', feedback: 'Only reads within the evaluation workspace are permitted.' };
+}
+
 // Promptfoo custom provider backed by the official SDK, not a model API substitute.
 export default class CopilotProvider {
   constructor(options = {}) {
@@ -10,7 +27,7 @@ export default class CopilotProvider {
   id() { return 'github:copilot-sdk'; }
 
   async callApi(prompt) {
-    const { CopilotClient } = await import('@github/copilot-sdk');
+    const { CopilotClient, ToolSet } = await import('@github/copilot-sdk');
     const client = new CopilotClient({
       workingDirectory: this.config.working_dir,
       baseDirectory: this.config.state_dir,
@@ -31,20 +48,9 @@ export default class CopilotProvider {
         configDirectory: this.config.state_dir,
         enableConfigDiscovery: false,
         skillDirectories: this.config.skill_directories ?? [],
-        availableTools: ['view', 'glob', 'grep', 'skill'],
+        availableTools: new ToolSet().addBuiltIn(READ_ONLY_TOOLS),
         onPermissionRequest: async (request) => {
-          let withinWorkspace = false;
-          if (request.kind === 'read' && typeof request.path === 'string') {
-            try {
-              const resolved = await realpath(path.resolve(this.config.working_dir, request.path));
-              const relative = path.relative(this.config.working_dir, resolved);
-              withinWorkspace = !path.isAbsolute(relative) && relative !== '..'
-                && !relative.startsWith(`..${path.sep}`);
-            } catch { /* Missing or unresolvable paths do not receive read permission. */ }
-          }
-          const result = withinWorkspace
-            ? { kind: 'approve-once' }
-            : { kind: 'reject', feedback: 'Only reads within the evaluation workspace are permitted.' };
+          const result = await workspaceReadPermission(this.config.working_dir, request);
           await record({ type: 'harness.permission', request, result });
           return result;
         },
