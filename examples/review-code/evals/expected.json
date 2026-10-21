@@ -1,0 +1,9 @@
+{
+  "R1": [{"file":"src/helpers.js","function":"totalPrice","kind":"boundary"},{"file":"src/helpers.js","function":"normalizeEmail","kind":"null-handling"}],
+  "R2": [{"file":"src/helpers.js","function":"totalPrice","kind":"boundary"}],
+  "R3": [{"file":"src/helpers.js","function":"normalizeEmail","kind":"null-handling"}],
+  "R4": [],
+  "R5": [{"file":"src/helpers.js","function":"totalPrice","kind":"boundary"},{"file":"src/helpers.js","function":"normalizeEmail","kind":"null-handling"}],
+  "R6": [{"file":"src/helpers.js","function":"totalPrice","kind":"boundary"},{"file":"src/helpers.js","function":"normalizeEmail","kind":"null-handling"}],
+  "R7": 2
+}

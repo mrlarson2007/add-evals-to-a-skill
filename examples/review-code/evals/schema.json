@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["findings"],
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "function", "kind", "explanation"],
+        "properties": {
+          "file": {"type": "string", "minLength": 1},
+          "function": {"type": "string", "minLength": 1},
+          "kind": {"enum": ["boundary", "null-handling"]},
+          "explanation": {"type": "string", "pattern": "\\S"}
+        }
+      }
+    }
+  }
+}
