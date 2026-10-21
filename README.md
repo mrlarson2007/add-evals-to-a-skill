@@ -43,6 +43,11 @@ cache-free, and bounded by `--timeout` milliseconds per trial. For a release
 comparison, select an explicit runtime-supported `--model` for both arms; an
 unobserved runtime default cannot establish a fixed resolved model.
 
+Every `no-skill` trial also requires observable nonactivation, not just a correct
+answer: an inherited `review-code` invocation or invocation attempt fails the
+baseline, and missing activation evidence leaves it unverified. This applies to
+all cases, not only the unrelated routing task.
+
 Each live trial uses promptfoo's evaluator and file assertion, retaining
 `promptfooconfig.json`, `promptfoo-report.json`, independent inventories, and a
 result in ignored `.eval-results/`. Summaries show raw successes/attempts and

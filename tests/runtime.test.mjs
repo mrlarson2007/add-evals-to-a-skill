@@ -17,6 +17,35 @@ import { claudeToolPermission, createClaudeHooks, readIsolation } from '../scrip
 const execute = promisify(execFile);
 const root = fileURLToPath(new URL('../', import.meta.url));
 
+test('every no-skill case requires nonactivation, including inherited and attempted skill use', () => {
+  for (const caseId of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7']) {
+    for (const [response, wanted] of [
+      [{ metadata: { events: [
+        { type: 'skill.invoked', data: { name: 'review-code' } }, { type: 'session.idle' },
+      ] } }, false],
+      [{ metadata: { attemptedSkillCalls: [{ name: 'review-code', source: 'heuristic' }],
+        events: [{ type: 'session.idle' }] } }, false],
+      [{}, null],
+      [{ metadata: { events: [{ type: 'session.idle' }] } }, true],
+    ]) {
+      const observations = observeResponse(response);
+      const checks = scoreChecks({
+        caseId, variant: 'no-skill', grade: { pass: true }, unchanged: { pass: true },
+        canary: { pass: true }, observations, runtimeFailed: false, dryRun: false,
+      });
+      assert.equal(checks.routing.pass, wanted, caseId);
+      assert.equal(profileVerdict({
+        caseId, variant: 'no-skill', observations, checks, isolation: { verified: true },
+      }).pass, wanted, caseId);
+      // The final verdict also fails closed if a caller omitted baseline scoring.
+      assert.equal(profileVerdict({
+        caseId, variant: 'no-skill', observations, checks: { pass: true },
+        isolation: { verified: true },
+      }).pass, wanted, caseId);
+    }
+  }
+});
+
 test('Copilot default-denies outside, ambiguous, missing, write, and symlink-escape requests', async () => {
   const trial = path.join(root, '.eval-results', `permission-contract-${randomUUID()}`);
   const workspace = path.join(trial, 'workspace');

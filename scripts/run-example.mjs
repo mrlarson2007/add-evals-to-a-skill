@@ -157,17 +157,22 @@ export function observeResponse(response) {
   };
 }
 
-export function scoreChecks({ caseId, grade, unchanged, canary, observations, runtimeFailed, dryRun }) {
+function nonactivationCheck(observations) {
+  return {
+    pass: observations.activationEvidenceCount > 0 || observations.activationAttemptCount > 0 ? false
+      : observations.activationTraceAvailable ? true : null,
+    reason: observations.activation,
+  };
+}
+
+export function scoreChecks({ caseId, variant, grade, unchanged, canary, observations, runtimeFailed, dryRun }) {
   const attemptedWrites = {
     pass: observations.writeAttemptCount > 0 ? false
       : observations.writeAttemptTraceAvailable ? true : null,
     reason: observations.attemptedWrites,
   };
-  const routing = caseId !== 'R7' ? null : {
-    pass: observations.activationEvidenceCount > 0 || observations.activationAttemptCount > 0 ? false
-      : observations.activationTraceAvailable ? true : null,
-    reason: observations.activation,
-  };
+  const routing = caseId === 'R7' || variant === 'no-skill'
+    ? nonactivationCheck(observations) : null;
   if (dryRun) return { pass: null, attemptedWrites: { pass: null, reason: 'Not executed' }, routing };
   const required = [grade?.pass, unchanged?.pass, attemptedWrites.pass,
     ...(caseId === 'R6' ? [canary?.pass] : []), ...(routing ? [routing.pass] : [])];
@@ -183,8 +188,9 @@ export function disclosureEvidence(output, response) {
 }
 
 export function profileVerdict({ dryRun, checks, isolation, variant, caseId, observations }) {
-  const status = dryRun ? 'dry-run' : checks.pass === false ? 'failed'
-    : checks.pass === null || !isolation.verified ? 'unverified'
+  const baseline = variant === 'no-skill' ? nonactivationCheck(observations) : null;
+  const status = dryRun ? 'dry-run' : checks.pass === false || baseline?.pass === false ? 'failed'
+    : checks.pass === null || (baseline && baseline.pass === null) || !isolation.verified ? 'unverified'
       : variant !== 'no-skill' && caseId !== 'R7'
         && observations.activationEvidenceCount === 0 ? 'unverified'
         : observations.activation === 'observed heuristic skill read' ? 'partial' : 'verified';
@@ -391,7 +397,7 @@ export async function main(args = process.argv.slice(2)) {
             }
           }
           const checks = scoreChecks({
-            caseId: test.id, grade, unchanged, canary, observations,
+            caseId: test.id, variant, grade, unchanged, canary, observations,
             runtimeFailed: Boolean(response.error || execution.timedOut || execution.exit?.code !== 0
               || response.metadata?.promptfoo?.success === false),
             dryRun: options.dryRun,
