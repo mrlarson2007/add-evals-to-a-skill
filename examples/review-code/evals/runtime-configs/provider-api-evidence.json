@@ -17,7 +17,7 @@
   "cleanInstallVerification": {
     "commands": ["npm ci", "npm run eval:check"],
     "result": "Both commands exited zero in a fresh project copy excluding node_modules, .git, .eval-results, and .authoring-exercise. A separate project-local npm cache and project-local TMPDIR override were used for validation.",
-    "offlineTests": "Latest source-copy validation: 29 passed using installed ancestor dependencies and project-local TMPDIR. This includes Claude hook/path defenses and Codex isolation verdict cap. The separately retained clean-install run passed its then-current 26 tests.",
+    "offlineTests": "Latest source-copy validation: 32 passed using installed ancestor dependencies and project-local TMPDIR. This includes usage/report telemetry, Claude hook/path defenses and Codex isolation verdict cap. The separately retained clean-install run passed its then-current 26 tests.",
     "localEvidence": ".eval-results/clean-install-277b31ca-1df6-4390-aff5-0ce4b62e3948/verification.json",
     "liveCommand": "npm run eval:smoke -- --runtime copilot --timeout 45000",
     "liveResult": "Passed with real SDK tool use and skill invocation after workspace read restrictions and tri-state scoring were applied. Latest observed Copilot CLI version: 1.0.102; resolved model: claude-sonnet-5.5."
@@ -106,6 +106,12 @@
     "skillDiscovery": "Explicit skillDirectories points to the isolated .agents/skills directory.",
     "permissions": "PermissionRequestRead in generated/session-events.d.ts documents kind: read and path: string. Only canonical realpath-resolved workspace descendants receive { kind: approve-once }; missing/ambiguous/outside/symlink-escape paths, managed-human-approval or sandbox-bypass requests, and all non-read requests are rejected. Discovery artifacts are inside the same workspace. The runtime rejects approve and approved as callback responses; approve-once was verified live.",
     "tools": "Official SDK ToolSet.addBuiltIn([view, glob, grep, skill]) source-qualifies the allowlist as builtin:view, builtin:glob, builtin:grep, builtin:skill. The native skill tool is retained. Actual tool.execution_start events observed skill and view; skill.invoked is the native activation event. No skill.used event is invented.",
+    "usageTelemetry": {
+      "source": "Documented AssistantUsageData in generated/session-events.d.ts: inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, reasoningTokens; cost is described as experimental model-multiplier billing cost, not USD.",
+      "normalization": "Observed assistant.usage events are deduplicated by accounting usageId, API call id, or event id. Complete observed input/output fields are summed into promptfoo prompt/completion/total tokenUsage; cached counts are not added again. Partial fields remain explicitly reported with coverage counts, never guessed as zero.",
+      "billing": "Raw reported billing values are retained separately. Monetary USD cost remains null; subscription allocation and currency conversion are unavailable, not zero.",
+      "capturedVerification": ".eval-results/copilot-usage-verification.json records 13533 input, 427 output, 6462 cache-read, 7063 cache-write and 0 reasoning tokens from two actual reported calls; raw billing values [1,1] are not treated as dollars."
+    },
     "verification": "A real R1/current smoke passed after workspace read restrictions were applied. Native tool execution and skill.invoked for review-code were observed.",
     "sourceQualifiedFollowUp": "A later project-local live evaluation exercised ToolSet.addBuiltIn, observed native skill and view tool execution plus skill.invoked, and failed the strict output assertion because the response used Markdown fences. Tool availability is verified; that run is not reported as a passing task outcome.",
     "latestNativeValidation": {

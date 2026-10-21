@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import { access, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   buildPromptfooConfig, disclosureEvidence, execute as executeTrial, observedRuntime, observeResponse,
   parseArgs, profileVerdict, providerFor, scoreChecks, summarizeTrials, validatePromptfooConfig,
@@ -80,6 +80,42 @@ test('Copilot missing usage fields stay unknown rather than zero or fabricated t
   assert.equal(missing.tokenUsage, null);
   assert.equal(missing.reportedUsage.inputTokens, null);
   assert.deepEqual(missing.reportedUsage.reportedBillingCostValues, []);
+});
+
+test('promptfoo reports retain normalized Copilot tokens without a monetary cost', async () => {
+  const trial = path.join(root, '.eval-results', `usage-report-${randomUUID()}`);
+  const workspace = path.join(trial, 'workspace');
+  await mkdir(workspace, { recursive: true });
+  const providerFile = path.join(trial, 'usage-provider.mjs');
+  await writeFile(providerFile, `
+    import { summarizeCopilotUsage } from ${JSON.stringify(pathToFileURL(path.join(root, 'scripts/copilot-provider.mjs')).href)};
+    export default class UsageContractProvider {
+      id() { return 'offline-usage-contract-only'; }
+      async callApi() {
+        const usage = summarizeCopilotUsage([{ type: 'assistant.usage', data: {
+          inputTokens: 10, outputTokens: 3, cacheReadTokens: 4,
+          cacheWriteTokens: 2, reasoningTokens: 1, cost: 1
+        } }]);
+        return { output: '2', tokenUsage: usage.tokenUsage, metadata: { reportedUsage: usage.reportedUsage } };
+      }
+    }
+  `);
+  try {
+    const config = buildPromptfooConfig({
+      prompt: 'Offline token reporting contract', caseId: 'R7', timeout: 10000,
+      provider: { id: providerFile, config: {} },
+    });
+    const execution = await executeTrial({ workspace, config }, trial, 10000);
+    assert.equal(execution.response.metadata.promptfoo.success, true);
+    assert.equal(execution.response.tokenUsage.prompt, 10);
+    assert.equal(execution.response.tokenUsage.completion, 3);
+    assert.equal(execution.response.cost, undefined);
+    assert.equal(execution.response.metadata.reportedUsage.monetaryCostUsd, null);
+    const report = JSON.parse(await readFile(path.join(trial, 'promptfoo-report.json'), 'utf8'));
+    assert.equal(report.stats.tokenUsage.prompt, 10);
+    assert.equal(report.stats.tokenUsage.completion, 3);
+    assert.equal(report.results[0].response.cost, undefined);
+  } finally { await rm(trial, { recursive: true, force: true }); }
 });
 
 test('Claude mandatory PreToolUse guards canonical reads, recursive searches, skills, and unrelated tools', async () => {
