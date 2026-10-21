@@ -415,6 +415,7 @@ export async function main(args = process.argv.slice(2)) {
             isolation,
             environment: 'fresh temporary workspace outside repository hierarchy; user-level runtime configuration/authentication may still apply',
             tokenUsage: response.tokenUsage ?? null, cost: response.cost ?? null,
+            reportedUsage: response.metadata?.reportedUsage ?? null,
             promptfooPass: response.metadata?.promptfoo?.success ?? null,
             checks,
             outcomePass: grade?.pass ?? null,

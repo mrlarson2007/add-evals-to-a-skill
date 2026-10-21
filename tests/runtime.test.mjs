@@ -11,7 +11,7 @@ import {
   parseArgs, profileVerdict, providerFor, scoreChecks, summarizeTrials, validatePromptfooConfig,
 } from '../scripts/run-example.mjs';
 import { checkCanary } from '../examples/review-code/evals/grader.mjs';
-import { READ_ONLY_TOOLS, workspaceReadPermission } from '../scripts/copilot-provider.mjs';
+import { READ_ONLY_TOOLS, summarizeCopilotUsage, workspaceReadPermission } from '../scripts/copilot-provider.mjs';
 import { claudeToolPermission, createClaudeHooks, readIsolation } from '../scripts/runtime-isolation.mjs';
 
 const execute = promisify(execFile);
@@ -46,6 +46,40 @@ test('Copilot read-only allowlist is source-qualified and retains the native ski
   const { ToolSet } = await import('@github/copilot-sdk');
   assert.deepEqual(new ToolSet().addBuiltIn(READ_ONLY_TOOLS).toArray(),
     ['builtin:view', 'builtin:glob', 'builtin:grep', 'builtin:skill']);
+});
+
+test('Copilot usage sums documented token fields without treating billing multipliers as USD', () => {
+  const data = (apiCallId, inputTokens, outputTokens) => ({
+    apiCallId, inputTokens, outputTokens, cacheReadTokens: 4,
+    cacheWriteTokens: 2, reasoningTokens: 1, cost: 1,
+  });
+  const usage = summarizeCopilotUsage([
+    { type: 'assistant.usage', id: 'first', data: data('call-1', 10, 3) },
+    { type: 'assistant.usage', id: 'duplicate', data: data('call-1', 10, 3) },
+    { type: 'assistant.usage', id: 'second', data: data('call-2', 20, 7) },
+    { type: 'session.usage_checkpoint', data: { inputTokens: 9999, cost: 9999 } },
+  ]);
+  assert.deepEqual(usage.tokenUsage, { prompt: 30, completion: 10, total: 40, numRequests: 2, cached: 8 });
+  assert.equal(usage.reportedUsage.rawEventCount, 3);
+  assert.equal(usage.reportedUsage.accountedCalls, 2);
+  assert.equal(usage.reportedUsage.cacheWriteTokens, 4);
+  assert.equal(usage.reportedUsage.reasoningTokens, 2);
+  assert.deepEqual(usage.reportedUsage.reportedBillingCostValues, [1, 1]);
+  assert.equal(usage.reportedUsage.monetaryCostUsd, null);
+  assert.match(usage.reportedUsage.billingUnitLimitation, /not USD/);
+});
+
+test('Copilot missing usage fields stay unknown rather than zero or fabricated token totals', () => {
+  const partial = summarizeCopilotUsage([{ type: 'assistant.usage', data: { outputTokens: 5, cost: 1 } }]);
+  assert.equal(partial.tokenUsage, null);
+  assert.equal(partial.reportedUsage.inputTokens, null);
+  assert.equal(partial.reportedUsage.outputTokens, 5);
+  assert.equal(partial.reportedUsage.cacheReadTokens, null);
+  assert.equal(partial.reportedUsage.monetaryCostUsd, null);
+  const missing = summarizeCopilotUsage([]);
+  assert.equal(missing.tokenUsage, null);
+  assert.equal(missing.reportedUsage.inputTokens, null);
+  assert.deepEqual(missing.reportedUsage.reportedBillingCostValues, []);
 });
 
 test('Claude mandatory PreToolUse guards canonical reads, recursive searches, skills, and unrelated tools', async () => {
