@@ -49,6 +49,17 @@ test('enforced Codex audit can verify covered reads without inventing a native a
   const unconfined = observeResponse({ ...response, metadata: { ...metadata, harnessIsolation: {} } });
   assert.equal(unconfined.activationReadVerified, false);
   assert.equal(unconfined.writeAttemptTraceAvailable, false);
+  const unsupportedTool = observeResponse({
+    metadata: {
+      ...metadata, harnessCodexAudit: {
+        ...metadata.harnessCodexAudit, verifiedSkillRead: false,
+        activationTraceAvailable: false, writeAttemptTraceAvailable: false,
+      },
+    },
+    raw: { items: [{ type: 'mcp_tool_call' }] },
+  });
+  assert.equal(unsupportedTool.activationTraceAvailable, false);
+  assert.equal(unsupportedTool.writeAttemptTraceAvailable, false);
   const attemptedWrite = observeResponse({
     ...response, metadata: { ...metadata, harnessCodexAudit: { ...metadata.harnessCodexAudit, writeAttemptCount: 1 } },
   });

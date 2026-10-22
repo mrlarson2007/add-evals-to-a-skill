@@ -267,6 +267,11 @@ source was inspected: it opens the actual JSON files and checks ordered entries,
 zero preservation, exact fields, and totals rather than transcript claims.
 Earlier failed attempts remain in local evidence. This is one explicit-invocation
 authoring scenario, not a causal ablation or a general compatibility guarantee.
+The captured authored suite also passed a stricter offline follow-up: 73 grader
+probes (including 24 same-length entry-value/order mutations) and two promptfoo
+assertion probes. A regression test rejects a misleading grader that checks only
+entry count and totals. This supplemental check made no new model calls and did
+not overwrite the original live evidence.
 The tested run used standalone sibling storage; the command now defaults to
 an OS-temporary workspace outside the checkout and retains a workspace snapshot
 with its evidence before cleanup.
