@@ -17,6 +17,47 @@ import { claudeToolPermission, createClaudeHooks, readIsolation } from '../scrip
 const execute = promisify(execFile);
 const root = fileURLToPath(new URL('../', import.meta.url));
 
+test('enforced Codex audit can verify covered reads without inventing a native activation event', () => {
+  const metadata = {
+    harnessIsolation: {
+      kind: 'docker-native-codex', configured: true, freshHome: true, nativeLaunches: 1,
+      filesystem: 'empty-root-explicit-readonly-mounts',
+      network: 'none-with-model-only-unix-relay',
+      probe: Object.fromEntries([
+        'verified', 'readDenied', 'writeDenied', 'hostWriteDenied', 'networkDenied',
+        'networkNamespaceOnlyLoopback', 'relayReachable', 'relayDeniesOtherPaths',
+      ].map((key) => [key, true])),
+    },
+    harnessCodexAudit: {
+      kind: 'strict-native-command-audit', verifiedSkillRead: true,
+      activationTraceAvailable: true, writeAttemptTraceAvailable: true,
+      writeAttemptCount: 0, skillReadAttemptCount: 1,
+    },
+  };
+  const response = { metadata, raw: { items: [{ type: 'command_execution', command: 'cat SKILL.md' }] } };
+  const observations = observeResponse(response);
+  const isolation = readIsolation('codex', response);
+  const checks = scoreChecks({
+    caseId: 'R1', variant: 'current', grade: { pass: true }, unchanged: { pass: true },
+    observations, runtimeFailed: false,
+  });
+  assert.equal(observations.activationEvidenceKind, 'heuristic');
+  assert.equal(observations.activationReadVerified, true);
+  assert.equal(profileVerdict({ caseId: 'R1', variant: 'current', checks, isolation, observations }).pass, true,
+    'Synthetic consumer contract only, not a live Codex pass');
+  assert.equal(profileVerdict({ caseId: 'R1', variant: 'no-skill', checks, isolation, observations }).pass, false);
+  const unconfined = observeResponse({ ...response, metadata: { ...metadata, harnessIsolation: {} } });
+  assert.equal(unconfined.activationReadVerified, false);
+  assert.equal(unconfined.writeAttemptTraceAvailable, false);
+  const attemptedWrite = observeResponse({
+    ...response, metadata: { ...metadata, harnessCodexAudit: { ...metadata.harnessCodexAudit, writeAttemptCount: 1 } },
+  });
+  assert.equal(scoreChecks({
+    caseId: 'R1', variant: 'current', grade: { pass: true }, unchanged: { pass: true },
+    observations: attemptedWrite, runtimeFailed: false,
+  }).pass, false);
+});
+
 test('every no-skill case requires nonactivation, including inherited and attempted skill use', () => {
   for (const caseId of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7']) {
     for (const [response, wanted] of [

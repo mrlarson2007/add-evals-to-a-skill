@@ -87,6 +87,32 @@ aren't there.” The workflow should inspect the target before drafting criteria
 preserve existing tests, and ask only about genuinely missing requirements.
 Installation is not proof the host actually loaded or followed the skill.
 
+### Test the authoring experience
+
+The five scripted authoring/install tests are template and utility checks, not
+tests of an agent following the skill. A separate opt-in test starts a fresh
+Copilot SDK session against an unfamiliar nested shipment-index skill:
+
+```sh
+npm run eval:authoring -- --runtime copilot --model claude-sonnet-5.5 --timeout 300000
+```
+
+This is a credentialed, potentially billable command; it is never enabled by
+ordinary offline CI. It installs the canonical authoring skill, verifies native
+activation with the exact installed content, and gives the agent only the target
+contract and scoped workspace tools. The target and installed skill remain
+unchanged. After stopping the author session, independent probes run its generated
+artifact grader against correct files and wrong totals, wrong identity/content,
+missing/malformed files, and dropped zero-unit entries. A success message alone
+cannot pass. The same generated grader is exercised through promptfoo.
+
+Raw discovery events, skill hashes, generated suites, source reviews, failures,
+and independent probe results stay local in ignored `.eval-results/authoring-*`.
+A passing run supplies evidence about one installed-skill authoring scenario on Copilot CLI/SDK, not target
+execution, other hosts, or a causal guarantee that the model needed the skill.
+Default offline tests skip the credentialed scenario explicitly; to run it via
+the test runner, set `AUTHORING_LIVE=1`.
+
 To copy the generic artifact-producing template into a new eval directory:
 
 ```sh
@@ -167,7 +193,7 @@ Do not infer compatibility from an installed dependency or passing offline tests
 | --- | --- | --- |
 | Codex SDK / CLI | Unrun in Codex host | Attempted: R1/current timed out at 15 seconds; no behavioral verdict |
 | Claude Code / Claude Agent SDK | Unrun in Claude Code host | Unrun: native provider reports missing authentication |
-| Copilot CLI / official Copilot SDK | Unrun in Copilot CLI host | Tested through official SDK: passing and malformed-output smoke attempts preserved; not release-verified |
+| Copilot CLI / official Copilot SDK | Tested in the scoped-tool SDK profile: fresh installed-skill authoring on an unfamiliar shipment-index target | Tested through official SDK: passing and malformed-output smoke attempts preserved; not release-verified |
 | Copilot VS Code, cloud agent, code review | Unrun | Unsupported by this example harness |
 
 Repository-local copy consistency and scripted authoring scenarios are offline
@@ -188,6 +214,35 @@ External answer access or inherited configuration would invalidate a comparison;
 do not treat that native profile as release-verified without a separate enforced
 read boundary. Temporary directories prevent accidental discovery, not deliberate
 filesystem traversal.
+
+An optional **Linux, local-Docker** profile supplies a real filesystem/network
+boundary instead of relying on that sandbox:
+
+```sh
+EVAL_CODEX_ISOLATION=docker npm run eval:smoke -- --runtime codex --model gpt-5.4 --timeout 180000
+```
+
+It requires the pinned native Codex executable, a running local Docker daemon,
+and `OPENAI_API_KEY` or `CODEX_API_KEY` supplied through your normal secret
+environment configuration. It does not mount personal CLI login state. The
+profile imports an empty local image (no pull), mounts only the read-only fixture,
+runtime binaries/libraries, and a restricted model relay, and uses a fresh HOME.
+The container has no external network; the relay forwards only the fixed model
+responses endpoint, keeping the real API key outside the agent.
+
+Enforcement probes must deny evaluator/answer reads, fixture/host writes, and
+arbitrary networking before native execution. Missing prerequisites or failed
+probes fail closed; ordinary Codex authentication alone cannot verify isolation.
+The CLI's inner sandbox is replaced by the outer read-only container boundary,
+not disabled without a replacement. Outcome, heuristic activation, attempted
+operations, and missing observations remain separate scoring requirements.
+Codex activation evidence stays **heuristic**, never a native invocation event.
+A complete native trace containing only narrowly recognized literal read commands,
+including a successful full skill-file read matching the installed content hash,
+can satisfy the observable profile checks. Unknown commands, scripts, compound
+shell expressions, or incomplete traces remain unverified; a read-only filesystem
+alone does not prove that no write was attempted.
+
 Claude's worker configures mandatory path-checking `PreToolUse` hooks and audits
 reported tool coverage; these controls have offline contract checks but still
 need authenticated native validation.
@@ -201,6 +256,20 @@ temporary-directory override). The scripted authoring scenarios produced and ope
 actual files, rejected missing/corrupt/wrong artifacts, and retained existing
 cases while adding a zero-value regression. They are **not native authoring
 compatibility tests**.
+
+The focused follow-up exercised actual fresh-agent authoring through Copilot
+SDK 1.0.25 / CLI 1.0.102 requesting `claude-sonnet-5.5`. A passing outside-checkout run
+authored eight target-specific cases: 49 independent good/broken-file probes
+passed, followed by two real promptfoo file-assertion probes (good accepted,
+wrong total rejected). Native activation included the exact installed skill
+body; target and installed artifact hashes remained unchanged. Generated grader
+source was inspected: it opens the actual JSON files and checks ordered entries,
+zero preservation, exact fields, and totals rather than transcript claims.
+Earlier failed attempts remain in local evidence. This is one explicit-invocation
+authoring scenario, not a causal ablation or a general compatibility guarantee.
+The tested run used standalone sibling storage; the command now defaults to
+an OS-temporary workspace outside the checkout and retains a workspace snapshot
+with its evidence before cleanup.
 
 Development live commands included:
 
@@ -229,7 +298,7 @@ the loop omits the final item (including a singleton), and a permitted null user
 throws instead of returning null. This inspection covers that response only.
 Detailed installed API evidence is recorded beside the example runtime configs.
 
-Remaining validation: host-native authoring on all three products, a successful
+Remaining validation: native authoring on Codex and Claude, a successful
 Codex run with an adequate authenticated timeout, authenticated Claude execution,
 and complete matched three-trial comparisons. Observation gaps must remain
 unverified, even when output checks pass.

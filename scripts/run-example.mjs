@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readIsolation } from './runtime-isolation.mjs';
+import { cleanupCodexArtifacts } from './codex-isolation.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const example = path.join(root, 'examples/review-code');
@@ -99,6 +100,9 @@ export async function validatePromptfooConfig(config, workspace) {
 
 export function observeResponse(response) {
   const metadata = response.metadata ?? {};
+  const codexAudit = readIsolation('codex', response).verified
+    && metadata.harnessCodexAudit?.kind === 'strict-native-command-audit'
+    ? metadata.harnessCodexAudit : null;
   const events = [...(metadata.events ?? []), ...(metadata.harnessIsolation?.events ?? [])];
   const activation = events.filter((event) =>
     event.type === 'skill.invoked' && event.data?.name === 'review-code');
@@ -130,6 +134,9 @@ export function observeResponse(response) {
     hasCodexTrace = Array.isArray(raw?.items);
   } catch { /* Opaque native traces remain available for manual inspection. */ }
   writeAttempts.push(...codexItems.filter((item) => item.type === 'file_change'));
+  const auditedRead = codexAudit?.verifiedSkillRead === true;
+  const auditedWrites = codexAudit?.writeAttemptCount ?? 0;
+  const auditedAttempts = codexAudit?.skillReadAttemptCount ?? 0;
   const hasShellCalls = codexItems.some((item) => item.type === 'command_execution')
     || (metadata.toolCalls ?? []).some((call) => /^(bash|shell|powershell)$/i.test(call.name ?? ''))
     || events.some((event) => event.type === 'tool.execution_start'
@@ -138,21 +145,29 @@ export function observeResponse(response) {
     events.some((event) => event.type === 'session.idle')
     || Array.isArray(metadata.toolCalls) || hasCodexTrace
   );
-  const activationTraceAvailable = toolTraceAvailable && !hasCodexTrace;
+  const activationTraceAvailable = hasCodexTrace
+    ? codexAudit?.activationTraceAvailable === true : toolTraceAvailable;
+  const writeAttemptTraceAvailable = hasCodexTrace
+    ? codexAudit?.writeAttemptTraceAvailable === true : toolTraceAvailable && !hasShellCalls;
   return {
-    activation: activation.length || skillCalls.length
+    activation: auditedRead ? 'observed heuristic skill read'
+      : activation.length || skillCalls.length
       ? skillCalls.some((call) => call.source === 'heuristic') && !activation.length
         ? 'observed heuristic skill read' : 'observed tool invocation'
       : activationAttempts.length ? 'observed skill tool attempt'
         : activationTraceAvailable ? 'not observed in available native tool trace' : 'unknown',
-    activationEvidenceCount: activation.length + skillCalls.length,
-    activationAttemptCount: activationAttempts.length,
+    activationEvidenceCount: activation.length + skillCalls.length + (auditedRead ? 1 : 0),
+    activationAttemptCount: activationAttempts.length + auditedAttempts,
+    activationReadVerified: auditedRead,
+    activationEvidenceKind: auditedRead ? 'heuristic' : activation.length || skillCalls.length
+      ? skillCalls.some((call) => call.source === 'heuristic') && !activation.length ? 'heuristic' : 'native'
+      : 'unavailable',
     activationTraceAvailable,
     toolTranscriptAvailable: toolTraceAvailable,
-    attemptedWrites: writeAttempts.length ? 'observed'
-      : toolTraceAvailable && !hasShellCalls ? 'not observed in available native tool trace' : 'unknown',
-    writeAttemptCount: writeAttempts.length,
-    writeAttemptTraceAvailable: toolTraceAvailable && !hasShellCalls,
+    attemptedWrites: writeAttempts.length || auditedWrites ? 'observed'
+      : writeAttemptTraceAvailable ? 'not observed in available native tool trace' : 'unknown',
+    writeAttemptCount: writeAttempts.length + auditedWrites,
+    writeAttemptTraceAvailable,
     limitation: 'Missing traces do not establish non-activation or absence of write attempts; shell commands require manual mutation inspection.',
   };
 }
@@ -193,7 +208,8 @@ export function profileVerdict({ dryRun, checks, isolation, variant, caseId, obs
     : checks.pass === null || (baseline && baseline.pass === null) || !isolation.verified ? 'unverified'
       : variant !== 'no-skill' && caseId !== 'R7'
         && observations.activationEvidenceCount === 0 ? 'unverified'
-        : observations.activation === 'observed heuristic skill read' ? 'partial' : 'verified';
+        : observations.activation === 'observed heuristic skill read'
+          && observations.activationReadVerified !== true ? 'partial' : 'verified';
   return { status, pass: status === 'failed' ? false : status === 'verified' ? true : null };
 }
 
@@ -268,6 +284,7 @@ export async function execute(input, runDir, timeout) {
   const log = await open(path.join(runDir, 'runtime.log'), 'w');
   let timedOut = false;
   let exit;
+  let cleanupError;
   try {
     exit = await new Promise((resolve, reject) => {
       const child = spawn(process.execPath, [path.join(root, 'scripts/runtime-worker.mjs'), inputPath, responsePath], {
@@ -291,10 +308,18 @@ export async function execute(input, runDir, timeout) {
         resolve({ code, signal });
       });
     });
-  } finally { await log.close(); }
+  } finally {
+    await log.close();
+    try { await cleanupCodexArtifacts(runDir); }
+    catch (error) { cleanupError = String(error); }
+  }
   let response;
   try { response = JSON.parse(await readFile(responsePath, 'utf8')); }
   catch { response = { error: timedOut ? 'Runtime timed out' : 'Runtime produced no valid response artifact' }; }
+  if (cleanupError) {
+    response.cleanupError = cleanupError;
+    response.error = `${response.error ?? 'Runtime completed'}; Codex cleanup failed: ${cleanupError}`;
+  }
   return { response, timedOut, exit };
 }
 
@@ -409,6 +434,8 @@ export async function main(args = process.argv.slice(2)) {
           const result = {
             case: test.id, variant, repeat, runtime: options.runtime, provider: provider.id,
             model: options.model ?? null, ...observedRuntime(response),
+            requestedIsolationProfile: options.runtime === 'codex'
+              ? process.env.EVAL_CODEX_ISOLATION ?? 'native-read-only-unverified' : null,
             settings: provider.config, repeatCount: options.repeat, plannedCalls,
             startedAt, finishedAt: new Date().toISOString(), lockHash, fixtureHash,
             dryRun: Boolean(options.dryRun), durationMs: Date.now() - started,

@@ -86,10 +86,23 @@ export function createClaudeHooks(workspace, options = {}) {
 }
 
 export function readIsolation(runtime, response) {
-  if (runtime === 'codex') return {
-    available: false, verified: false,
-    reason: 'Codex read-only sandbox restricts writes but does not confine reads to cwd. Evaluator files remain readable; no passing release profile is asserted.',
-  };
+  if (runtime === 'codex') {
+    const evidence = response.metadata?.harnessIsolation;
+    const available = evidence?.kind === 'docker-native-codex' && evidence.configured === true;
+    const verified = available && !response.error
+      && evidence.filesystem === 'empty-root-explicit-readonly-mounts'
+      && evidence.network === 'none-with-model-only-unix-relay'
+      && evidence.freshHome === true && Number.isSafeInteger(evidence.nativeLaunches) && evidence.nativeLaunches > 0
+      && ['verified', 'readDenied', 'writeDenied', 'hostWriteDenied', 'networkDenied',
+        'networkNamespaceOnlyLoopback', 'relayReachable', 'relayDeniesOtherPaths']
+        .every((name) => evidence.probe?.[name] === true);
+    return {
+      available, verified,
+      reason: verified
+        ? 'Native Codex ran in a probed empty-root Docker read/write boundary with no external network and a model-only relay'
+        : 'Codex read-only mode does not confine reads. Opt-in Docker boundary, successful enforcement probes, and a native runtime completion are required.',
+    };
+  }
   if (runtime === 'claude') {
     const evidence = response.metadata?.harnessIsolation;
     return {

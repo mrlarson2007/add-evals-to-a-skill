@@ -11,6 +11,7 @@
     "install:skill": "node scripts/install-skill.mjs",
     "scaffold:evals": "node scripts/scaffold-evals.mjs",
     "eval:check": "node --test tests/*.test.mjs",
+    "eval:authoring": "node scripts/authoring-smoke.mjs",
     "eval:smoke": "node scripts/run-example.mjs --smoke",
     "eval:example": "node scripts/run-example.mjs"
   },
