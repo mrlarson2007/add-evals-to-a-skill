@@ -1,0 +1,5 @@
+node_modules/
+.eval-results/
+.env
+.env.*
+!.env.example
