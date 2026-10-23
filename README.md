@@ -55,6 +55,57 @@ individual failures, errors, timeouts, and unavailable observations. `FAIL` exit
 1; missing required evidence is `UNVERIFIED` (exit 2), not a pass. Dry runs are
 never executions. Inspect outcome and profile status separately.
 
+## Readable reports and three-model planning
+
+Generate a self-contained HTML report from saved results—no model calls, server,
+external chart library, or raw traces required:
+
+```sh
+npm run eval:report -- \
+  --input /absolute/path/to/run/summary.json \
+  --authoring /absolute/path/to/authoring-run/report.json \
+  --output /absolute/path/to/report.html
+```
+
+Repeat `--input` for additional model runs, and `--authoring` for authoring
+experiments. Authoring evidence stays in its own section: a generated grader
+rejecting broken files is not a code-review success rate.
+
+The report starts with what the tasks mean and why they matter, then shows
+correct-output and fully verified counts, an accessible task matrix with links
+to individual attempts, and current/proposed comparisons where the evidence
+supports matching. Failures, errors, timeouts, unverified observations, and unrun
+trials are distinct. Correct findings with an attempted prohibited write are not
+an overall pass. Reproduction details preserve model/CLI identifiers, artifact
+hashes, settings, and repeats; unknown values stay unknown. Different model
+profiles are not evidence of a skill revision's improvement.
+
+### Choose three Copilot CLI models
+
+Use the Copilot CLI model picker on your machine to confirm one Claude, one
+OpenAI, and one Gemini model available to your account. Exact IDs change; this
+project does not guess versions or silently substitute providers.
+
+```sh
+npm run eval:models -- \
+  --claude YOUR_CLAUDE_ID --openai YOUR_OPENAI_ID --gemini YOUR_GEMINI_ID
+```
+
+This prints a **plan only**, including explicit commands for three independent
+Copilot CLI/SDK model profiles. It does not authenticate, call models, or claim
+the IDs are available. Default seven-case, current/proposed, three-repeat
+evaluation plans **126 provider invocations** (42 per model). A trial can make
+multiple underlying model calls; usage/cost is unknown until reported. Adding
+`--no-skill` plans 189 invocations. Start with `--case R1 --variant proposed
+--repeat 1` to plan three smoke trials instead.
+
+Review the count and IDs before manually running the printed commands. Combine
+their saved summaries with repeatable `--input` flags. Optional report flags
+`--model-slot Claude=YOUR_CLAUDE_ID`, `--model-slot OpenAI=YOUR_OPENAI_ID`,
+and `--model-slot Gemini=YOUR_GEMINI_ID` show selected profiles even when unrun;
+they never create results. Full local traces can contain sensitive data: reports
+use a restricted set of fields, but inspect any generated report before sharing.
+
 ## Authoring versus execution
 
 These are independent claims:
